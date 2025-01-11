@@ -71,17 +71,16 @@ def _get_instance_to_solve(instance_id: str, settings: Settings) -> Optional[Ins
 
 def _clean_response(response: str, conversation_history: str = None) -> str:
     prompt = """
-    Below is a code review response and the previous conversation history. Extract and list only the NEW 
-    technical improvements or changes requested in the PR review that haven't been mentioned before. 
-    Focus on code changes, implementation details, and technical suggestions. 
-    Exclude any git-related suggestions (like splitting PRs, improving commit messages, or branch management).
-    Format the technical items in a clear, concise manner while maintaining their accuracy.
+    Below is a code review response and the previous conversation history. 
+    Extract and list only the NEW code changes requested in the PR review that haven't been mentioned before. 
+    Focus on code changes and exclude any git-related suggestions (like splitting PRs, improving commit messages, or branch management). 
+    Format the code changes in a clear, concise manner while maintaining their accuracy.
     
     Important: You are the requester in this conversation. Do not repeat information that you've already 
-    mentioned in previous messages, only provide new technical suggestions.
+    mentioned in previous messages, only provide new code changes.
 
-    If there are no new relevant technical suggestions to add that haven't been mentioned before, 
-    respond with exactly 'NO_RESPONSE_NEEDED'. Otherwise, list only the new technical improvements.
+    If there are no new relevant code changes to add that haven't been mentioned before, 
+    respond with exactly 'NO_RESPONSE_NEEDED'. Otherwise, list only the new code changes.
 
     Previous conversation:
     {history}
