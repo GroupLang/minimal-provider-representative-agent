@@ -111,6 +111,53 @@ def _clean_response(response: str, conversation_history: str = None) -> str:
         return response
 
 
+def _create_review_plan(pr_content: str, conversation_history: str = None) -> str:
+    prompt = """
+    You are a code review planner. Analyze the PR diff files and comments to create a focused review plan.
+    
+    Review these key aspects:
+    1. Code changes in the diff files - analyze the actual code modifications
+    2. Previous PR comments and conversation to avoid duplicate feedback
+    3. Technical impact of the changes
+    4. Potential issues or improvements in the modified code
+    
+    Important guidelines:
+    - Focus on NEW feedback only - do not repeat points already discussed
+    - Prioritize code-specific changes over process/git suggestions
+    - Pay special attention to:
+        * Logic changes and their correctness
+        * Edge cases in modified functions
+        * Code quality and maintainability
+        * Potential bugs or security issues
+    
+    Previous conversation:
+    {history}
+    
+    PR content (including diff and comments):
+    {content}
+    
+    Create a concise, structured review plan focusing only on areas that need NEW feedback.
+    """
+    
+    try:
+        plan = openai.chat.completions.create(
+            model="o1-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt.format(
+                        content=pr_content,
+                        history=conversation_history if conversation_history else "No previous conversation",
+                    ),
+                },
+            ],
+        )
+        return plan.choices[0].message.content.strip()
+    except Exception as e:
+        logger.error(f"Failed to create review plan: {e}")
+        return None
+
+
 def _solve_instance(
     instance_to_solve: InstanceToSolve,
 ) -> str:
@@ -165,6 +212,10 @@ def _solve_instance(
     solver_command += f"\nIssue: {issue_link.group(0)}"
 
     try:
+        review_plan = _create_review_plan(solver_command, instance_to_solve.messages_history)
+        if review_plan:
+            solver_command += f"\n\nReview plan:\n{review_plan}"
+
         response = modify_repo_with_aider(ModelName.gpt_4o, solver_command, repo_info)
         if not response:
             logger.warning("Received empty response from Aider")
