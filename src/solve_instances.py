@@ -53,7 +53,7 @@ def _get_instance_to_solve(instance_id: str, settings: Settings) -> Optional[Ins
             sorted_messages = sorted(chat, key=lambda m: m["timestamp"])
             last_message = sorted_messages[-1]
             provider_needs_response = (
-                last_message["sender"] == "provider" and len(sorted_messages) < 20
+                last_message["sender"] == "provider" and len(sorted_messages) < 15
             )
 
             messages_history = "\n\n".join(
@@ -79,8 +79,9 @@ def _clean_response(response: str, conversation_history: str = None) -> str:
     Important: You are the requester in this conversation. Do not repeat information that you've already 
     mentioned in previous messages, only provide new code changes.
 
-    If there are no new relevant code changes to add that haven't been mentioned before, 
-    respond with exactly 'NO_RESPONSE_NEEDED'. Otherwise, list only the new code changes.
+    If there are no new relevant code changes to add that haven't been mentioned before, or if the changes 
+    are not meaningful to implement, respond with exactly 'NO_RESPONSE_NEEDED'. Otherwise, list only the 
+    new code changes.
 
     Previous conversation:
     {history}
@@ -177,7 +178,7 @@ def _solve_instance(
         cleaned_response = _clean_response(
             response.strip(), conversation_history=instance_to_solve.messages_history
         )
-        if cleaned_response == "NO_RESPONSE_NEEDED":
+        if cleaned_response in "NO_RESPONSE_NEEDED":
             logger.info("No response needed for this instance")
             return None
 
