@@ -105,6 +105,7 @@ def _clean_response(response: str, conversation_history: str = None) -> str:
                 },
             ],
         )
+        logger.info(f"Cleaned response: {cleaned.choices[0].message.content.strip()}")
         return cleaned.choices[0].message.content.strip()
 
     except Exception as e:
