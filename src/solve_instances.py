@@ -165,6 +165,15 @@ def _solve_instance(
     solver_command = "\n\n\n".join(solver_command_parts)
     solver_command += f"\nFiles view: {files_url}"
     solver_command += f"\nIssue: {issue_link.group(0)}"
+    
+    if instance_to_solve.messages_history:
+        messages = instance_to_solve.messages_history.split('\n\n')
+        last_requester_message = next(
+            (msg for msg in reversed(messages) if msg.startswith('requester:')), 
+            None
+        )
+        if last_requester_message:
+            solver_command += f"\nLast requester message: {last_requester_message}"
 
     try:
         response = modify_repo_with_aider(ModelName.gpt_4o, solver_command, repo_info)
