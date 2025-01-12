@@ -28,7 +28,7 @@ def modify_repo_with_aider(model_name, solver_command, repo_info=None) -> str:
     cached_response = prompt_cache.get(solver_command, model_name)
     if cached_response:
         logger.info("Using cached response")
-        return cached_response
+        return "NO_RESPONSE_NEEDED"
 
     output_buffer = io.StringIO()
 
