@@ -14,10 +14,10 @@ def run_market_scan():
             logger.info("Starting market scan")
             market_scan_handler()
             logger.info("Market scan completed successfully")
-            logger.info("Waiting 10 seconds before next market scan...")
-            time.sleep(10)
         except Exception as e:
-            logger.info("Market scan iteration skipped")
+            logger.error(f"Market scan iteration failed: {str(e)}", exc_info=True)
+        finally:
+            logger.info("Waiting 10 seconds before next market scan...")
             time.sleep(10)
 
 
@@ -27,10 +27,10 @@ def run_solve_instances():
             logger.info("Starting solve_instances")
             solve_instances_handler()
             logger.info("solve_instances completed successfully")
-            logger.info("Waiting 10 seconds before next solve_instances...")
-            time.sleep(10)
         except Exception as e:
-            logger.info("Solve instances iteration skipped")
+            logger.error(f"Solve instances iteration failed: {str(e)}", exc_info=True)
+        finally:
+            logger.info("Waiting 10 seconds before next solve_instances...")
             time.sleep(10)
 
 

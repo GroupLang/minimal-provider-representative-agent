@@ -40,6 +40,26 @@ def fork_repo(github_url: str, github_token: str) -> str:
     return forked_repo.clone_url
 
 
+def generate_commit_message(repo_path: str) -> str:
+    """Generate a commit message based on the changes in the repository."""
+    try:
+        repo = git.Repo(repo_path)
+        diffs = repo.index.diff(None)
+        untracked = repo.untracked_files
+        
+        changes = []
+        if diffs:
+            changes.extend([f"Modified: {item.a_path}" for item in diffs])
+        if untracked:
+            changes.extend([f"Added: {file}" for file in untracked])
+            
+        if changes:
+            return "Changes:\n" + "\n".join(changes)
+        return "Update repository"
+    except Exception as e:
+        logger.error(f"Error generating commit message: {e}")
+        return None
+
 def add_and_commit(repo_path: str) -> None:
     try:
         repo = git.Repo(repo_path)
@@ -368,120 +388,6 @@ def get_last_pr_comments(pr_url: str, github_token: str) -> str | bool:
     return result
 
 
-def build_solver_command(
-    background: str, pr_comments: Optional[str], user_messages: Optional[str]
-) -> str:
-    if pr_comments and user_messages:
-        return _build_solver_command_from_pr_and_chat(background, pr_comments, user_messages)
-
-    if pr_comments:
-        return _build_solver_command_from_pr(background, pr_comments)
-
-    if user_messages:
-        return _build_solver_command_from_chat(background, user_messages)
-
-    return _build_solver_command_from_instance_background(background)
-
-
-def _build_solver_command_from_instance_background(background: str) -> str:
-    result = "\n".join(
-        [
-            "=== SYSTEM INSTRUCTIONS ===",
-            "You are a helpful AI assistant that interacts with a human and implements code "
-            "changes. Your task is to analyze the issue description and specifically address "
-            "the conversation with the user. Focus only on implementing changes requested in "
-            "the conversation with the user. Ensure your changes maintain code quality and "
-            "follow the project's standards",
-            "=== CONTEXT ===",
-            "ISSUE DESCRIPTION",
-            background,
-            "=== REQUIRED ACTIONS ===",
-            "1. Review the issue description to understand the context",
-            "2. Implement the necessary code changes to solve the issue",
-            "3. Ensure your changes maintain code quality and follow the project's standards",
-        ]
-    )
-    return result
-
-
-def _build_solver_command_from_pr_and_chat(
-    background: str, pr_comments: str, user_messages: str
-) -> str:
-    result = "\n".join(
-        [
-            "=== SYSTEM INSTRUCTIONS ===",
-            "You are a helpful AI assistant that interacts with a human and implements code "
-            "changes based on feedback provided via a pull request or a chat. Your task is to "
-            "analyze the issue description and specifically address the LAST comment in the "
-            "pull request. Focus only on implementing changes requested in the most recent "
-            "comment.",
-            "=== CONTEXT ===",
-            "ISSUE DESCRIPTION",
-            background,
-            "PULL REQUEST DETAILS",
-            pr_comments,
-            "CONVERSATION WITH THE USER",
-            user_messages,
-            "=== REQUIRED ACTIONS ===",
-            "1. Review the issue description to understand the context",
-            "2. Analyze the pull request diff and comments",
-            "3. Analyze the conversation with the user",
-            "4. Implement the necessary code changes addressing the feedback in the last comment "
-            "of the PR and the conversation with the user",
-            "5. Ensure your changes maintain code quality and follow the project's standards",
-        ]
-    )
-    return result
-
-
-def _build_solver_command_from_pr(background: str, pr_comments: str) -> str:
-    result = "\n".join(
-        [
-            "=== SYSTEM INSTRUCTIONS ===",
-            "You are a helpful AI assistant that interacts with a human and implements code "
-            "changes. Your task is to analyze the issue description and specifically address "
-            "the last comment in the pull request. Focus only on implementing changes requested "
-            "in the most recent comment. Ensure your changes maintain code quality and follow "
-            "the project's standards",
-            "=== CONTEXT ===",
-            "ISSUE DESCRIPTION",
-            background,
-            "PULL REQUEST DETAILS",
-            pr_comments,
-            "=== REQUIRED ACTIONS ===",
-            "1. Review the issue description to understand the context",
-            "2. Analyze the pull request diff and comments",
-            "3. Implement the necessary code changes addressing the feedback in the last comment "
-            "of the PR",
-            "4. Ensure your changes maintain code quality and follow the project's standards",
-        ]
-    )
-    return result
-
-
-def _build_solver_command_from_chat(background: str, user_messages: str) -> str:
-    result = "\n".join(
-        [
-            "=== SYSTEM INSTRUCTIONS ===",
-            "You are a helpful AI assistant that interacts with a human and implements code "
-            "changes. Your task is to analyze the issue description and specifically address the "
-            "conversation with the user. Focus only on implementing changes requested in the "
-            "conversation with the user. Ensure your changes maintain code quality and follow the "
-            "project's standards",
-            "=== CONTEXT ===",
-            "ISSUE DESCRIPTION",
-            background,
-            "CONVERSATION WITH THE USER",
-            user_messages,
-            "=== REQUIRED ACTIONS ===",
-            "1. Review the issue description to understand the context",
-            "2. Analyze the conversation with the user",
-            "3. Implement the necessary code changes addressing the feedback in the conversation "
-            "with the user",
-            "4. Ensure your changes maintain code quality and follow the project's standards",
-        ]
-    )
-    return result
 
 
 def add_aider_logs_as_pr_comments(pr_url: str, github_token: str, logs: str) -> None:
