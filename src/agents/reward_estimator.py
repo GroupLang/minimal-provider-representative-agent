@@ -27,11 +27,6 @@ def estimate_reward(background: str, chat_messages: str = None, max_credit_per_i
     cached_response = prompt_cache.get(prompt, "gpt-4")
     if cached_response:
         logger.info("Using cached response")
-        try:
-            return float(cached_response)
-        except ValueError:
-            logger.error("Invalid cached response format")
-            prompt_cache.clear()  # Clear invalid cache entry
     
     try:
         response = openai.chat.completions.create(
