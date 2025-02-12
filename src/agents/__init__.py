@@ -1,5 +1,5 @@
-from .reward_estimator import estimate_reward
+from .chatbot import process_message
 
 __all__ = [
-    "estimate_reward",
+    "process_message",
 ]

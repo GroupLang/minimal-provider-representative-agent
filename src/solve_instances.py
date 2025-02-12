@@ -6,7 +6,7 @@ import httpx
 import openai
 from loguru import logger
 
-from src.agents import estimate_reward
+from src.agents import process_message
 from src.config import SETTINGS, Settings
 from src.enums import ModelName
 
@@ -22,25 +22,6 @@ class InstanceToSolve:
     messages_history: Optional[str] = None
 
 
-def _submit_reward(instance_id: str, settings: Settings, reward: float) -> Optional[bool]:
-    try:
-        headers = {
-            "x-api-key": settings.market_api_key,
-            "Accept": "application/json",
-        }
-        
-        url = f"{settings.market_url}/v1/instances/{instance_id}/report-reward"
-        data = {"gen_reward": reward}
-        
-        with httpx.Client(timeout=TIMEOUT) as client:
-            response = client.put(url, headers=headers, json=data)
-            response.raise_for_status()
-            return response.json()
-    except Exception:
-        logger.error(f"Failed to submit reward for instance {instance_id}")
-        return None
-
-
 def _get_instance_to_solve(instance_id: str, settings: Settings) -> Optional[InstanceToSolve]:
     try:
         headers = {
@@ -51,13 +32,7 @@ def _get_instance_to_solve(instance_id: str, settings: Settings) -> Optional[Ins
             response = client.get(instance_endpoint, headers=headers)
             instance = response.json()
 
-            if instance.get("reward_estimation_id") is None:
-                return None
-
-            if (
-                not instance.get("status")
-                or instance["status"] != settings.market_resolved_instance_code
-            ):
+            if not instance.get("status") or instance["status"] != settings.market_resolved_instance_code:
                 return None
 
         with httpx.Client(timeout=TIMEOUT) as client:
@@ -72,6 +47,9 @@ def _get_instance_to_solve(instance_id: str, settings: Settings) -> Optional[Ins
                 return InstanceToSolve(instance=instance)
 
             sorted_messages = sorted(chat, key=lambda m: m["timestamp"])
+            
+            if not sorted_messages or sorted_messages[-1]["sender"] != "requester":
+                return None
 
             messages_history = "\n\n".join(
                 [f"{message['sender']}: {message['message']}" for message in sorted_messages]
@@ -85,24 +63,29 @@ def _get_instance_to_solve(instance_id: str, settings: Settings) -> Optional[Ins
         return None
 
 
-def _solve_instance(instance_to_solve: InstanceToSolve) -> Optional[str]:
-    logger.info("Solving instance id: {}", instance_to_solve.instance["id"])
+def _process_instance(instance_to_solve: InstanceToSolve) -> Optional[str]:
+    logger.info("Processing instance id: {}", instance_to_solve.instance["id"])
     
     try:
-        reward = estimate_reward(
-            background=instance_to_solve.instance.get("background", ""),
-            chat_messages=instance_to_solve.messages_history
+        background = instance_to_solve.instance.get("background", "")
+        last_message = ""
+        
+        if instance_to_solve.messages_history:
+            messages = instance_to_solve.messages_history.split("\n\n")
+            last_message = messages[-1].replace("requester: ", "")
+        
+        full_context = f"Initial message {background}\n\nLast message: {last_message}" if last_message else background
+        
+        response = process_message(
+            message=full_context,
+            chat_history=instance_to_solve.messages_history
         )
         
-        if reward is None:
-            logger.info("Could not estimate reward for instance")
-            return None, None
-            
-        if reward < 0:
-            logger.info("Negative reward value, skipping instance")
-            return None, None
+        if not response:
+            logger.info("Could not generate response for instance")
+            return None
 
-        return f"Estimated reward value: {reward}", reward
+        return response
 
     except Exception as e:
         logger.error(
@@ -159,7 +142,7 @@ def _send_message(instance_id: str, message: str, settings: Settings) -> Optiona
 
 
 def solve_instances_handler() -> None:
-    logger.info("Solve instances handler")
+    logger.info("Processing instances handler")
     awarded_proposals = get_awarded_proposals(SETTINGS)
 
     if not awarded_proposals:
@@ -172,14 +155,9 @@ def solve_instances_handler() -> None:
         if not instance_to_solve:
             continue
 
-        message, reward = _solve_instance(instance_to_solve)
-        if not message:
+        response = _process_instance(instance_to_solve)
+        if not response:
             continue
 
-        _send_message(instance_to_solve.instance["id"], message, SETTINGS)
-
+        _send_message(instance_to_solve.instance["id"], response, SETTINGS)
         logger.info(f"Sent message to instance {instance_to_solve.instance['id']}")
-
-        if isinstance(reward, float):
-            _submit_reward(instance_to_solve.instance["id"], SETTINGS, reward)
-            logger.info(f"Submitted reward for instance {instance_to_solve.instance['id']}")
