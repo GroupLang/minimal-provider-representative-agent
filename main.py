@@ -18,7 +18,7 @@ def run_market_scan():
             logger.error(f"Market scan iteration failed: {str(e)}", exc_info=True)
         finally:
             logger.info("Waiting 10 seconds before next market scan...")
-            time.sleep(10)
+            time.sleep(30)
 
 
 def run_solve_instances():
@@ -31,7 +31,7 @@ def run_solve_instances():
             logger.error(f"Solve instances iteration failed: {str(e)}", exc_info=True)
         finally:
             logger.info("Waiting 10 seconds before next solve_instances...")
-            time.sleep(10)
+            time.sleep(30)
 
 
 def main():
