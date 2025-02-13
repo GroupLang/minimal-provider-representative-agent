@@ -19,18 +19,14 @@ def process_message(message: str, chat_history: str = None) -> str:
     """
     try:
         response = openai.chat.completions.create(
-            model="gpt-4o",
+            model="o3-mini",
+            reasoning_effort="high",
             messages=[
-                {
-                    "role": "system",
-                    "content": "You are a helpful AI assistant that engages in general conversation."
-                },
                 {
                     "role": "user", 
                     "content": _build_prompt(message, chat_history)
                 }
             ],
-            temperature=0.7
         )
         
         return response.choices[0].message.content.strip()
