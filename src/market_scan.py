@@ -5,14 +5,44 @@ from loguru import logger
 
 from src import utils
 from src.config import SETTINGS, Settings
+from src.agents.chatbot import invoke_openai_model
 
 TIMEOUT = httpx.Timeout(10.0)
+
+
+async def _is_background_decomposable(background: str) -> bool:
+    """Check if a background text can be decomposed into small tasks using ChatGPT.
+
+    Args:
+        background: The background text to analyze
+
+    Returns:
+        bool: True if the background can be decomposed into small tasks, False otherwise
+    """
+    prompt = f"""
+    Analyze the following request and determine if it can be decomposed into small, manageable tasks:
+    
+    {background}
+    
+    Respond with only 'YES' if the request can be broken down into small tasks, or 'NO' if it cannot.
+    """
+    
+    try:
+        response = await invoke_openai_model(prompt)
+        return response.strip().upper() == "YES"
+    except Exception as e:
+        logger.error("Error checking if background is decomposable: {}", str(e))
+        return False
 
 
 async def _create_proposal_for_instance(instance: dict, settings: Settings) -> None:
     instance_id = instance["id"]
     if utils.find_github_repo_url(instance["background"]):
         logger.info("Instance id {} have a github repo url", instance_id)
+        return
+    
+    if not await _is_background_decomposable(instance["background"]):
+        logger.info("Instance id {} cannot be decomposed into small tasks", instance_id)
         return
 
     logger.info("Creating proposal for instance id: {}", instance_id)

@@ -76,16 +76,16 @@ def _process_instance(instance_to_solve: InstanceToSolve) -> Optional[str]:
         
         full_context = f"Initial message {background}\n\nLast message: {last_message}" if last_message else background
         
-        response = process_message(
+        workflow_tasks = process_message(
             message=full_context,
             chat_history=instance_to_solve.messages_history
         )
         
-        if not response:
+        if not workflow_tasks:
             logger.info("Could not generate response for instance")
             return None
 
-        return response
+        return workflow_tasks
 
     except Exception as e:
         logger.error(
@@ -140,6 +140,53 @@ def _send_message(instance_id: str, message: str, settings: Settings) -> Optiona
     except Exception:
         return None
 
+def _send_instances_from_workflow(instance_to_solve: InstanceToSolve, workflow_tasks: str) -> None:
+    """
+    Create a new instance based on workflow tasks.
+    
+    Args:
+        instance_to_solve: The original instance that triggered the workflow
+        workflow_tasks: The workflow tasks to include in the new instance
+    """
+    logger.info(f"Creating new instance from workflow for instance {instance_to_solve.instance['id']}")
+    
+    try:
+        # Prepare the data for the new instance
+        instance_data = {
+            "background": workflow_tasks,
+            "max_credit_per_instance": SETTINGS.max_bid,  # Use the max bid from settings
+            "percentage_reward": 1,  # Default percentage reward
+            "side_effect_free": True,  # Set as side-effect free
+            "representative_agent": True,  # Mark as representative agent instance
+            "max_providers": 1,  # Default to 1 provider
+        }
+        
+        # Make the API request to create a new instance
+        headers = {
+            "x-api-key": SETTINGS.market_api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        
+        url = f"{SETTINGS.market_url}/v1/instances"
+        
+        with httpx.Client(timeout=TIMEOUT) as client:
+            response = client.post(url, headers=headers, json=instance_data)
+            response.raise_for_status()
+            new_instance = response.json()
+            
+        logger.info(f"Successfully created new instance: {new_instance.get('id')}")
+        
+    except httpx.HTTPStatusError as e:
+        logger.error(
+            f"HTTP error creating instance from workflow: {e.response.status_code} - {e.response.text}"
+        )
+    except Exception as e:
+        logger.error(
+            f"Error creating instance from workflow: {str(e)}",
+            exc_info=True,
+        )
+
 
 def solve_instances_handler() -> None:
     logger.info("Processing instances handler")
@@ -155,9 +202,13 @@ def solve_instances_handler() -> None:
         if not instance_to_solve:
             continue
 
-        response = _process_instance(instance_to_solve)
-        if not response:
+        workflow_tasks = _process_instance(instance_to_solve)
+        if not workflow_tasks:
             continue
 
-        _send_message(instance_to_solve.instance["id"], response, SETTINGS)
+        _send_instances_from_workflow(instance_to_solve, workflow_tasks)
+
+        joined_tasks = "\n\n".join(workflow_tasks)
+    
+        _send_message(instance_to_solve.instance["id"], joined_tasks, SETTINGS)
         logger.info(f"Sent message to instance {instance_to_solve.instance['id']}")
