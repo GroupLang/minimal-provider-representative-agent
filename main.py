@@ -1,6 +1,7 @@
 import multiprocessing
 import sys
 import time
+import asyncio
 
 from loguru import logger
 
@@ -25,7 +26,10 @@ def run_solve_instances():
     while True:
         try:
             logger.info("Starting solve_instances")
-            solve_instances_handler()
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(solve_instances_handler())
+            loop.close()
             logger.info("solve_instances completed successfully")
         except Exception as e:
             logger.error(f"Solve instances iteration failed: {str(e)}", exc_info=True)

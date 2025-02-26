@@ -63,7 +63,7 @@ def _get_instance_to_solve(instance_id: str, settings: Settings) -> Optional[Ins
         return None
 
 
-def _process_instance(instance_to_solve: InstanceToSolve) -> Optional[str]:
+async def _process_instance(instance_to_solve: InstanceToSolve) -> Optional[str]:
     logger.info("Processing instance id: {}", instance_to_solve.instance["id"])
     
     try:
@@ -76,7 +76,7 @@ def _process_instance(instance_to_solve: InstanceToSolve) -> Optional[str]:
         
         full_context = f"Initial message {background}\n\nLast message: {last_message}" if last_message else background
         
-        workflow_tasks = process_message(
+        workflow_tasks = await process_message(
             message=full_context,
             chat_history=instance_to_solve.messages_history
         )
@@ -156,8 +156,8 @@ def _send_instances_from_workflow(instance_to_solve: InstanceToSolve, workflow_t
             "background": workflow_tasks,
             "max_credit_per_instance": SETTINGS.max_bid,  # Use the max bid from settings
             "percentage_reward": 1,  # Default percentage reward
-            "side_effect_free": True,  # Set as side-effect free
-            "representative_agent": True,  # Mark as representative agent instance
+            "side_effect_free": False,  # Set as side-effect free
+            "representative_agent": False,  # Mark as representative agent instance
             "max_providers": 1,  # Default to 1 provider
         }
         
@@ -188,7 +188,7 @@ def _send_instances_from_workflow(instance_to_solve: InstanceToSolve, workflow_t
         )
 
 
-def solve_instances_handler() -> None:
+async def solve_instances_handler() -> None:
     logger.info("Processing instances handler")
     awarded_proposals = get_awarded_proposals(SETTINGS)
 
@@ -202,11 +202,13 @@ def solve_instances_handler() -> None:
         if not instance_to_solve:
             continue
 
-        workflow_tasks = _process_instance(instance_to_solve)
+        workflow_tasks = await _process_instance(instance_to_solve)
         if not workflow_tasks:
             continue
 
-        _send_instances_from_workflow(instance_to_solve, workflow_tasks)
+        for task in workflow_tasks:
+            logger.info(f"Task: {task}")
+            _send_instances_from_workflow(instance_to_solve, task)
 
         joined_tasks = "\n\n".join(workflow_tasks)
     

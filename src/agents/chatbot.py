@@ -502,7 +502,7 @@ workflow = args.workflow
     
     return success, stdout_output, stderr_output
 
-async def split_workflow_into_subtasks(workflow_message: str, execution_logs: str) -> List[Dict[str, Any]]:
+async def split_workflow_into_subtasks(workflow_message: str, execution_logs: str) -> List[str]:
     """
     Send the workflow message and execution logs to ChatGPT to split the workflow into subtasks.
     
@@ -511,7 +511,7 @@ async def split_workflow_into_subtasks(workflow_message: str, execution_logs: st
         execution_logs: The logs captured during code execution
         
     Returns:
-        A list of dictionaries, each representing a subtask with properties like
+        A list of strings, each containing a formatted subtask with properties like
         name, description, dependencies, complexity, status, and estimated time
     """
     prompt = f"""
@@ -565,16 +565,12 @@ async def split_workflow_into_subtasks(workflow_message: str, execution_logs: st
             status_match = re.search(r'\*\*Status\*\*: (.*?)(?=\n-|\Z)', content)
             time_match = re.search(r'\*\*Estimated Time\*\*: (.*?)(?=\n-|\Z)', content)
             
-            # Create subtask dictionary
-            subtask = {
-                "number": number,
-                "name": name,
-                "description": description_match.group(1).strip() if description_match else "",
-                "dependencies": dependencies_match.group(1).strip() if dependencies_match else "None",
-                "complexity": complexity_match.group(1).strip() if complexity_match else "Medium",
-                "status": status_match.group(1).strip() if status_match else "Not Started",
-                "estimated_time": time_match.group(1).strip() if time_match else "1 hour"
-            }
+            subtask = f"""## Subtask {number}: {name}
+                - **Description**: {description_match.group(1).strip() if description_match else ""}
+                - **Dependencies**: {dependencies_match.group(1).strip() if dependencies_match else "None"}
+                - **Complexity**: {complexity_match.group(1).strip() if complexity_match else "Medium"}
+                - **Status**: {status_match.group(1).strip() if status_match else "Not Started"}
+                - **Estimated Time**: {time_match.group(1).strip() if time_match else "1 hour"}"""
             
             subtasks.append(subtask)
         
@@ -650,79 +646,6 @@ async def process_message(message: str, chat_history: str = None) -> str:
     print("EXECUTION RESULTS")
     print("="*80)
     
-    if success:
-        print("Code executed successfully!")
-    else:
-        print("Code execution failed!")
-        
-        # Initialize variables for iterative fixing
-        current_code = generated_code
-        max_iterations = 10  # Increased from 3 to 10 for more fix attempts
-        iteration = 0
-        
-        # Try fixing the code up to max_iterations times
-        while not success and iteration < max_iterations:
-            iteration += 1
-            print(f"\n" + "="*80)
-            print(f"ATTEMPTING FIX ITERATION {iteration}/{max_iterations}")
-            print("="*80)
-            
-            # Try to fix the code
-            current_code = await fix_code_errors(current_code, stderr or stdout)
-            
-            print("\nFIXED CODE:")
-            print("-"*40)
-            print(current_code)
-            
-            # Save the fixed code
-            with open("workflow_code.py", "w") as file:
-                file.write(current_code)
-            
-            # Install dependencies for fixed code
-            print("\n" + "="*80)
-            print(f"CHECKING AND INSTALLING DEPENDENCIES FOR ITERATION {iteration}")
-            print("="*80)
-            
-            install_success, install_message = await install_dependencies(current_code)
-            print(install_message)
-            
-            if not install_success:
-                print(f"Failed to install required dependencies in iteration {iteration}. Skipping execution.")
-                break
-            
-            # Execute the fixed code
-            print("\n" + "="*80)
-            print(f"EXECUTING FIXED CODE (ITERATION {iteration})")
-            print("="*80)
-            
-            success, stdout, stderr = await execute_generated_code(current_code)
-            
-            print("\n" + "="*80)
-            print(f"ITERATION {iteration} EXECUTION RESULTS")
-            print("="*80)
-            
-            if success:
-                print(f"Code fixed successfully after {iteration} iteration(s)!")
-            else:
-                print(f"Code execution failed in iteration {iteration}")
-        
-        if not success:
-            print(f"\nFailed to fix code after {max_iterations} iterations")
-        
-    print("\nSTANDARD OUTPUT:")
-    print("-"*40)
-    print(stdout)
-    
-    if stderr:
-        print("\nERROR OUTPUT:")
-        print("-"*40)
-        print(stderr)
-    
-    # Split the workflow into subtasks using ChatGPT
-    print("\n" + "="*80)
-    print("SPLITTING WORKFLOW INTO SUBTASKS")
-    print("="*80)
-    
     # Combine stdout and stderr for complete logs
     execution_logs = f"STDOUT:\n{stdout}\n\nSTDERR:\n{stderr}"
     subtasks = await split_workflow_into_subtasks(message, execution_logs)
@@ -730,38 +653,7 @@ async def process_message(message: str, chat_history: str = None) -> str:
     print("\nWORKFLOW SUBTASKS:")
     print("-"*40)
     
-    # Convert subtasks list to formatted markdown for display and saving
-    subtasks_markdown = f"# Workflow Subtasks for: {message}\n\n"
-    
-    if subtasks:
-        # Add overview section
-        subtasks_markdown += "## Overview\n"
-        subtasks_markdown += f"- Total subtasks: {len(subtasks)}\n"
-        total_hours = sum(float(task['estimated_time'].replace(' hours', '').replace(' hour', '')) 
-                          for task in subtasks 
-                          if task['estimated_time'].replace(' hours', '').replace(' hour', '').replace('.', '', 1).isdigit())
-        subtasks_markdown += f"- Estimated completion time: {total_hours:.1f} hours\n\n"
-        
-        # Add each subtask
-        for task in subtasks:
-            subtasks_markdown += f"## Subtask {task['number']}: {task['name']}\n"
-            subtasks_markdown += f"- **Description**: {task['description']}\n"
-            subtasks_markdown += f"- **Dependencies**: {task['dependencies']}\n"
-            subtasks_markdown += f"- **Complexity**: {task['complexity']}\n"
-            subtasks_markdown += f"- **Status**: {task['status']}\n"
-            subtasks_markdown += f"- **Estimated Time**: {task['estimated_time']}\n\n"
-    else:
-        subtasks_markdown += "No subtasks were identified.\n"
-    
-    print(subtasks_markdown)
-    
-    # Save subtasks to a file
-    with open("workflow_subtasks.md", "w") as file:
-        file.write(subtasks_markdown)
-    
-    print("\nSubtasks saved to workflow_subtasks.md")
-    
-    return f"Workflow processed. {len(subtasks)} subtasks identified and saved to workflow_subtasks.md"
+    return subtasks
 
 async def main():
     # Example Mermaid diagram representing a project development workflow
